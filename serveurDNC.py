@@ -16,65 +16,29 @@ list = []
 
 def connect(match, isconnected, list):
     str = ","
-    if (len(match.group("variable")) > 10) and (match.group("variable")[0] == "@") and (str.find(match.group("variable")) != -1):
-        answer = "ERR_INVALIDNICKNAME"
-    elif (match.group("variable") is None):
-        answer = "ERR_NOTENOUGHARGS"
+    var = match.group("variable")
+    req = re.compile(r"^?P<variable>[a-zA-Z0-9_]{1,15}+")
+    matchReq = re.match(req, var)
+    if (match.group("variable") is None):
+        answer = "403"
+    elif (matchReq is None):
+        answer = "408"
     elif (match.group("variable") in list):
-        answer = "ERR_NICKNAMEINUSE"
+        answer = "405"
     elif (isconnected == True):
-        answer = "ERR_ALREADYCONNECTED"
+        answer = "400"
     else:
-        answer = "100 RPL_DONE"
-        information = ":" + match.group("variable") + " CONNECT"
+        answer = "200"
+        informationAllClient = "*" + match.group("variable") + " CONNECT"
+        informationClient = "*" + list
         list += match.group("variable")
         isconnected = True
         pseudo = match.group("variable")
-    return answer, information
+    return answer, informationAllClient, informationClient
 
-def quit(match, isconnected, list, pseudo):
-    if(isconnected == False):
-        answer = "ERR_NOTCONNECTED"
-    else:
-        answer = "100 RPL_DONE"
-        if(match.group("variable") is not None):
-            information = ":" + pseudo + " QUIT " + match.group("variable")
-        else:
-            information = ":" + pseudo + " QUIT"
-        list -= pseudo
-    return answer, information
-
-def message(match, isconnected, pseudo, status):
-    if(isconnected == False):
-        answer = "ERR_NOTCONNECTED"
-    elif (match.group("variable") is None):
-        answer = "ERR_NOTENOUGHARGS"
-    elif (status == "AWAY"):
-        answer = "ERR_BADSTATUS"
-    else:
-        answer = "100 RPL_DONE"
-        information = ":" + pseudo + " MESSAGE " + match.group("variable")
-    return answer, information
-
-def sendAllClients(message, list): 
-    for client in list : 
+def sendAllClients(message, list):
+    for client in list :
         client.send(message)
-
-def whisper(match, isconnected, pseudo, list):
-    listMessagePrivate = []
-    if(isconnected == False):
-        answer = "ERR_NOTCONNECTED"
-    elif ((match.group("variable") not in list) || (match.group("variable2") not in list)):
-        answer = "ERR_NICKNAMENOTEXIST"
-    elif ((match.group("variable") is None) || (match.group("variable3") is None)):
-        answer = "ERR_NOTENOUGHARGS"
-    else:
-        answer = "100 RPL_DONE"
-        information = ":" + pseudo + " WHISPER " + match.group("variable3")
-        listMessagePrivate += pseudo
-        listMessagePrivate += (match.group("variable3")
-    return answer, information, listMessagePrivate
-
 
 def treat_client(sock_client):
     isconnected = False
@@ -82,13 +46,14 @@ def treat_client(sock_client):
     status = ""
     data = sock_client.recv(1024)
     data = data.decode()
-    request = re.compile(r"^(?P<command>[A-Z]+) (?P<variable>[a-zA-Z0-9_]{1,10}+) (?P<variable2>[a-zA-Z0-9_]{1,10}+)? (?P<variable3>[a-zA-Z0-9_]{1,10}+)?")
+    request = re.compile(r"^(?P<command>[A-Z]+)(?P<variable> \w+)*")
     match = re.match(request, data)
     if (match is not None):
         answer = ""
-        information = ""
+        informationAllClient = ""
+        informationClient = ""
         if(match.group("command") == "CONNECT"):
-            answer, information = connect(match, isconnected, list)
+            answer, informationAllClient, informationClient = connect(match, isconnected, list)
         elif(match.group("command") == "QUIT"):
             answer, information = quit(match, isconnected, list, pseudo)
         elif(match.group("command") == "MESSAGE"):
@@ -100,8 +65,9 @@ def treat_client(sock_client):
         else:
             pass
         sock_client.send(answer.encode())
-        sock_client.sendAllClients(information.encode(), list)
-        sock_client.sendAllClients(information2.encode(), listMessagePrivate)
+        sock_client.sendAllClients(informationAllClient.encode())
+        sock_client.sendAllClients(informationClient.encode())
+        #sock_client.sendAllClients(information2.encode(), listMessagePrivate)
 
 
 while True:
